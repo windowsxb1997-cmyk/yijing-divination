@@ -17,28 +17,34 @@ export default function TossStage({ tosses, yaos, onDone }: TossStageProps) {
   const onDoneRef = useRef(onDone)
   onDoneRef.current = onDone
 
-  // 每一轮：先摇币，后落定
+  // 单条时间链驱动整个六轮流程，任意时刻只有一个计时器存活
   useEffect(() => {
-    const t = window.setTimeout(() => setLanded(true), SHAKE_MS)
-    return () => window.clearTimeout(t)
-  }, [round])
-
-  // 落定展示后进入下一轮，或结束
-  useEffect(() => {
-    if (!landed) return
-    const t = window.setTimeout(
-      () => {
-        if (round >= 5) {
-          onDoneRef.current()
-        } else {
-          setLanded(false)
-          setRound((r) => r + 1)
-        }
-      },
-      round >= 5 ? SHOW_MS + 600 : SHOW_MS,
-    )
-    return () => window.clearTimeout(t)
-  }, [landed, round])
+    let timer = 0
+    let cancelled = false
+    const runRound = (r: number) => {
+      if (cancelled) return
+      setLanded(false)
+      setRound(r)
+      timer = window.setTimeout(() => {
+        if (cancelled) return
+        setLanded(true)
+        timer = window.setTimeout(
+          () => {
+            if (cancelled) return
+            if (r >= 5) onDoneRef.current()
+            else runRound(r + 1)
+          },
+          r >= 5 ? SHOW_MS + 600 : SHOW_MS,
+        )
+      }, SHAKE_MS)
+    }
+    runRound(0)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const toss = tosses[round]
   const yao = yaos[round]
